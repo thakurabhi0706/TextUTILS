@@ -3,6 +3,9 @@ import cors from "cors"
 import sessionRoutes from "./routes/sessions.js"
 import path from "path"
 import { fileURLToPath } from "url"
+import { askAI } from "./lib/api.js"
+import "dotenv/config"
+
 
 const app = express()
 const PORT = 4000
@@ -19,3 +22,19 @@ app.use("/api/sessions", sessionRoutes)
 app.listen(PORT, () => {
   console.log(`Backend running on http://localhost:${PORT}`)
 })
+
+
+app.post("/api/ai/ask", async (req, res) => {
+  try {
+    const { prompt, content } = req.body
+    const reply = await askAI(prompt, content)
+    res.json({ reply })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+
+
+

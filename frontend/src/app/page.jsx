@@ -30,6 +30,25 @@ export default function Home() {
     setFiles(data.files || [])
   }
 
+  const handleAICommand = async (prompt) => {
+  const res = await fetch("http://localhost:4000/api/ai/ask", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, content }),
+  })
+
+  const data = await res.json()
+
+  if (!data.reply) {
+    alert("AI failed. Check backend logs.")
+    return
+  }
+
+  persistContent(content + "\n\n" + data.reply)
+}
+
+
+
   /* ---------- INIT ---------- */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -178,7 +197,7 @@ export default function Home() {
 
         <AICommandBar
           ref={aiInputRef}
-          onCommand={() => {}}
+          onCommand={handleAICommand}
           isFocused={isAIFocused}
           onFocusChange={setIsAIFocused}
         />
