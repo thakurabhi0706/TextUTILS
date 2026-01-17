@@ -5,7 +5,6 @@ import { TextEditor } from "../components/text-editor"
 import { AICommandBar } from "../components/ai-command-bar"
 import { Header } from "../components/header"
 import { SharePanel } from "../components/share-panel"
-import { generateSessionId } from "../lib/utils"
 import { X, Download, Trash2 } from "lucide-react"
 
 const API_BASE = "http://localhost:4000/api"
@@ -14,39 +13,63 @@ export default function Home() {
   const [sessionId, setSessionId] = useState("")
   const [content, setContent] = useState("")
   const [files, setFiles] = useState([])
-  const [isAIFocused, setIsAIFocused] = useState(false)
   const [sessionIdInput, setSessionIdInput] = useState("")
+  const [isAIFocused, setIsAIFocused] = useState(false)
   const [showShare, setShowShare] = useState(false)
   const [showQR, setShowQR] = useState(false)
 
   const aiInputRef = useRef(null)
   const saveTimeout = useRef(null)
 
-  /* INIT + LOAD SESSION */
+  /* ---------- LOAD SESSION ---------- */
+  const loadSession = async (id) => {
+    setSessionId(id)
+    const res = await fetch(`${API_BASE}/sessions/${id}`)
+    const data = await res.json()
+    setContent(data.content || "")
+    setFiles(data.files || [])
+  }
+
+  /* ---------- INIT ---------- */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    let id = params.get("session")
+    const urlId = params.get("session")
 
-    if (!id) {
-      id = generateSessionId()
-      window.history.replaceState({}, "", `?session=${id}`)
+    if (urlId) {
+      loadSession(urlId)
+    } else {
+      fetch(`${API_BASE}/sessions/new`, { method: "POST" })
+        .then(res => res.json())
+        .then(({ id }) => {
+          window.history.replaceState({}, "", `?session=${id}`)
+          loadSession(id)
+        })
     }
-
-    setSessionId(id)
-
-    fetch(`${API_BASE}/sessions/${id}`)
-      .then(res => res.json())
-      .then(data => {
-        setContent(data.content || "")
-        setFiles(data.files || [])
-      })
   }, [])
 
-  /* AUTO SAVE CONTENT (debounced) */
+  /* ---------- NEW CLIPBOARD ---------- */
+  const handleNewClipboard = () => {
+    fetch(`${API_BASE}/sessions/new`, { method: "POST" })
+      .then(res => res.json())
+      .then(({ id }) => {
+        window.history.pushState({}, "", `?session=${id}`)
+        loadSession(id)
+      })
+  }
+
+  /* ---------- LOAD FROM INPUT ---------- */
+  const handleLoadSession = (id) => {
+    if (!id.trim()) return
+    window.history.pushState({}, "", `?session=${id}`)
+    loadSession(id.trim().toUpperCase())
+    setSessionIdInput("")
+  }
+
+  /* ---------- AUTO SAVE ---------- */
   const persistContent = (value) => {
     setContent(value)
-
     clearTimeout(saveTimeout.current)
+
     saveTimeout.current = setTimeout(() => {
       fetch(`${API_BASE}/sessions/${sessionId}/content`, {
         method: "POST",
@@ -56,14 +79,12 @@ export default function Home() {
     }, 400)
   }
 
-  /* FILE HELPERS */
+  /* ---------- FILE HELPERS ---------- */
   const isImage = (type) => type?.startsWith("image/")
-
   const forceDownload = async (file) => {
     const res = await fetch(`http://localhost:4000${file.url}`)
     const blob = await res.blob()
     const url = window.URL.createObjectURL(blob)
-
     const a = document.createElement("a")
     a.href = url
     a.download = file.name
@@ -85,33 +106,16 @@ export default function Home() {
     <div className="min-h-screen bg-background flex flex-col">
       <Header
         sessionId={sessionId}
+        sessionIdInput={sessionIdInput}
+        onSessionIdChange={setSessionIdInput}
+        onLoadSession={handleLoadSession}
+        onNewClipboard={handleNewClipboard}
         onAskAI={() => {
           setIsAIFocused(true)
           setTimeout(() => aiInputRef.current?.focus(), 0)
         }}
-        onNewClipboard={() => {
-          const id = generateSessionId()
-          setSessionId(id)
-          setContent("")
-          setFiles([])
-          window.history.pushState({}, "", `?session=${id}`)
-        }}
         onToggleShare={() => setShowShare(true)}
         onShowQR={() => setShowQR(true)}
-        sessionIdInput={sessionIdInput}
-        onSessionIdChange={setSessionIdInput}
-        onLoadSession={(id) => {
-          if (!id.trim()) return
-          setSessionId(id)
-          window.history.pushState({}, "", `?session=${id}`)
-
-          fetch(`${API_BASE}/sessions/${id}`)
-            .then(res => res.json())
-            .then(data => {
-              setContent(data.content || "")
-              setFiles(data.files || [])
-            })
-        }}
       />
 
       <main className="flex-1 flex flex-col overflow-hidden">
@@ -129,7 +133,6 @@ export default function Home() {
               onClear={() => persistContent("")}
             />
 
-            {/* FILE LIST */}
             {files.length > 0 && (
               <div className="border rounded-lg p-3 space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground">
