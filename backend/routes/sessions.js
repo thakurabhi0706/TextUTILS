@@ -1,29 +1,14 @@
 import express from "express"
-import fs from "fs"
-import path from "path"
 import multer from "multer"
+import path from "path"
 import { fileURLToPath } from "url"
-import { createUniqueSession } from "./shortCode.js"
+import Session from "../models/Session.js"
 
 const router = express.Router()
 
-/* ---------- PATH SETUP ---------- */
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-
-const DATA_DIR = path.join(__dirname, "..", "data")
 const UPLOAD_DIR = path.join(__dirname, "..", "uploads")
-const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json")
-
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true })
-if (!fs.existsSync(SESSIONS_FILE)) fs.writeFileSync(SESSIONS_FILE, "{}")
-
-const readSessions = () =>
-  JSON.parse(fs.readFileSync(SESSIONS_FILE, "utf-8"))
-
-const writeSessions = (data) =>
-  fs.writeFileSync(SESSIONS_FILE, JSON.stringify(data, null, 2))
 
 /* ---------- MULTER SETUP ---------- */
 const storage = multer.diskStorage({
@@ -36,85 +21,78 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage })
 
-/* ---------- GET SESSION (AUTO-CREATE) ---------- */
-router.get("/:id", (req, res) => {
-  const { id } = req.params
-  const sessions = readSessions()
+/* ---------- CREATE SESSION ---------- */
+router.post("/new", async (req, res) => {
+  try {
+    const shortCode = Math.random().toString(36).substring(2, 8).toUpperCase()
 
-  if (!sessions[id]) {
-    sessions[id] = {
+    const newSession = await Session.create({
+      sessionId: shortCode,
+      shortCode,
       content: "",
       files: [],
-      createdAt: Date.now(),
-    }
-    writeSessions(sessions)
-  }
+    })
 
-  res.json(sessions[id])
+    res.json({ id: newSession.sessionId })
+  } catch (err) {
+    res.status(500).json({ error: "Failed to create session" })
+  }
 })
 
-/* ---------- CREATE NEW SESSION ---------- */
-router.post("/new", (req, res) => {
-  const id = createUniqueSession()
-  res.json({ id })
+/* ---------- GET SESSION ---------- */
+router.get("/:id", async (req, res) => {
+  try {
+    const session = await Session.findOne({ sessionId: req.params.id })
+
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" })
+    }
+
+    res.json(session)
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch session" })
+  }
 })
 
 /* ---------- SAVE CONTENT ---------- */
-router.post("/:id/content", (req, res) => {
-  const { id } = req.params
-  const { content } = req.body
+router.post("/:id/content", async (req, res) => {
+  try {
+    const { content } = req.body
 
-  const sessions = readSessions()
-  if (!sessions[id]) {
-    sessions[id] = { content: "", files: [], createdAt: Date.now() }
+    const updated = await Session.findOneAndUpdate(
+      { sessionId: req.params.id },
+      { content },
+      { new: true }
+    )
+
+    res.json(updated)
+  } catch (err) {
+    res.status(500).json({ error: "Failed to save session" })
   }
-
-  sessions[id].content = content
-  writeSessions(sessions)
-
-  res.json({ success: true })
 })
 
-/* ---------- FILE UPLOAD (FIXED) ---------- */
-router.post("/:id/files", upload.single("file"), (req, res) => {
-  const { id } = req.params
-  const sessions = readSessions()
+/* ---------- FILE UPLOAD ---------- */
+router.post("/:id/files", upload.single("file"), async (req, res) => {
+  try {
+    const fileData = {
+      name: req.file.originalname,
+      type: req.file.mimetype,
+      url: `/uploads/${req.file.filename}`,
+    }
 
-  if (!sessions[id]) {
-    sessions[id] = { content: "", files: [], createdAt: Date.now() }
+    const session = await Session.findOne({ sessionId: req.params.id })
+
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" })
+    }
+
+    session.files.push(fileData)
+    await session.save()
+
+    res.json(fileData)
+  } catch (err) {
+    res.status(500).json({ error: "Upload failed" })
   }
-
-  const fileData = {
-    name: req.file.originalname,
-    type: req.file.mimetype,
-    url: `/uploads/${req.file.filename}`,
-  }
-
-  sessions[id].files.push(fileData)
-  writeSessions(sessions)
-
-  res.json(fileData)
-})
-
-/* ---------- DELETE FILE ---------- */
-router.delete("/:id/files/:index", (req, res) => {
-  const { id, index } = req.params
-  const sessions = readSessions()
-
-  if (!sessions[id]) {
-    return res.status(404).json({ error: "Session not found" })
-  }
-
-  const file = sessions[id].files[index]
-  if (file) {
-    const filePath = path.join(__dirname, "..", file.url)
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
-  }
-
-  sessions[id].files.splice(index, 1)
-  writeSessions(sessions)
-
-  res.json({ success: true })
 })
 
 export default router
