@@ -19,21 +19,7 @@ connectDB()
 
 // CORS Configuration
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true)
-
-    const allowedOrigins = [
-      "http://localhost:3000",
-      "http://localhost:5173",
-      process.env.FRONTEND_URL
-    ]
-
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true)
-    } else {
-      callback(null, true) // allow all for now (safe for your project)
-    }
-  },
+  origin: true,
   credentials: true
 }))
 
