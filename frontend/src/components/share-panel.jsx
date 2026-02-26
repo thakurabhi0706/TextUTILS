@@ -1,9 +1,18 @@
 "use client"
 
+import { useState } from "react"
 import { X, Copy, Mail, MessageCircle } from "lucide-react"
 
-export function SharePanel({ sessionId, onClose }) {
-  const shareUrl = `${window.location.origin}?session=${sessionId}`
+export function SharePanel({ sessionId, onClose, onLoadSession }) {
+  const shareUrl = `${window.location.origin}/s/${sessionId}`
+  const [loadId, setLoadId] = useState("")
+
+  const handleLoadSession = () => {
+    if (loadId.trim()) {
+      onLoadSession?.(loadId.trim())
+      setLoadId("")
+    }
+  }
 
   const handleCopy = () => {
     navigator.clipboard.writeText(shareUrl)
@@ -49,6 +58,27 @@ export function SharePanel({ sessionId, onClose }) {
         <p className="text-xs text-muted-foreground mb-4">
           Anyone with this link can view and edit the clipboard.
         </p>
+
+        {/* Load Session Section */}
+        <div className="mb-4">
+          <h4 className="text-sm font-medium mb-2">Load Session</h4>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={loadId}
+              onChange={(e) => setLoadId(e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === "Enter" && handleLoadSession()}
+              placeholder="Enter session ID"
+              className="flex-1 px-3 py-2 text-sm border rounded-md font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
+            />
+            <button
+              onClick={handleLoadSession}
+              className="px-3 py-2 text-sm border rounded-md hover:bg-accent"
+            >
+              Load
+            </button>
+          </div>
+        </div>
 
         {/* Link box */}
         <div className="border rounded-md px-3 py-2 text-sm font-mono mb-4 break-all">
