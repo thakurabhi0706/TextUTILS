@@ -2,6 +2,7 @@ import express from "express"
 import multer from "multer"
 import path from "path"
 import { fileURLToPath } from "url"
+import fs from "fs"
 import Session from "../models/Session.js"
 
 const router = express.Router()
@@ -9,6 +10,11 @@ const router = express.Router()
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const UPLOAD_DIR = path.join(__dirname, "..", "uploads")
+
+// Ensure uploads directory exists
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true })
+}
 
 /* ---------- MULTER SETUP ---------- */
 const storage = multer.diskStorage({
