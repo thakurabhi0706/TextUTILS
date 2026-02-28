@@ -76,7 +76,7 @@ function PageContent() {
     const fullResponse = data.reply
     let charIndex = 0
     
-    const typeWriter = () => {
+    const typeWriter = async () => {
       if (charIndex < fullResponse.length) {
         setCurrentAIResponse(prev => prev + fullResponse[charIndex])
         charIndex++
@@ -117,6 +117,8 @@ function PageContent() {
     
     typeWriter()
   }
+
+  useEffect(() => {
     // Check for session in query params first
     const urlId = searchParams.get("session")
     
@@ -136,24 +138,7 @@ function PageContent() {
     }
   }, [searchParams])
 
-  useEffect(() => {
-    const urlId = searchParams.get("session")
-    
-    if (urlId) {
-      // Load session from query parameter
-      loadSession(urlId)
-    } else {
-      // Check if we're on the root path without session param
-      // Only create new session if no session is specified
-      fetch(`${getApiUrl()}/sessions/new`, { method: "POST" })
-        .then(res => res.json())
-        .then(({ id }) => {
-          window.history.replaceState({}, "", `?session=${id}`)
-          loadSession(id)
-        })
-        .catch(err => console.error('Failed to create session:', err))
-    }
-  }, [searchParams])
+  const persistContent = (value) => {
     setContent(value)
     clearTimeout(saveTimeout.current)
 
@@ -186,7 +171,6 @@ function PageContent() {
           console.error('Failed to save content:', err)
         }
       }
-    }
     }, 400)
   }
 
@@ -197,7 +181,6 @@ function PageContent() {
         window.history.pushState({}, "", `?session=${id}`)
         loadSession(id)
       })
-  }
   }
 
   const handleLoadSession = async (id) => {
