@@ -1,19 +1,12 @@
 import express from "express"
-
 import cors from "cors"
-
 import path from "path"
-
 import { fileURLToPath } from "url"
-
+import fs from "fs"
 import sessionRoutes from "./routes/sessions.js"
-
 import connectDB from "./config/db.js"
-
 import { askAI } from "./lib/api.js"
-
 import "dotenv/config"
-
 
 
 const app = express()
@@ -49,13 +42,12 @@ app.use(express.json({ limit: '10mb' }))
 
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
-
-
 // Serve static files
 const UPLOAD_DIR = path.join(__dirname, "uploads")
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true })
+}
 app.use("/uploads", express.static(UPLOAD_DIR))
-
-
 
 // Health check endpoint for Render
 
