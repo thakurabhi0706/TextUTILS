@@ -4,7 +4,7 @@ import { useState } from "react"
 import { X, Copy, Mail, MessageCircle } from "lucide-react"
 
 export function SharePanel({ sessionId, onClose, onLoadSession }) {
-  const shareUrl = `${window.location.origin}/s/${sessionId}`
+  const shareUrl = `${window.location.origin}/session/${sessionId}`
   const [loadId, setLoadId] = useState("")
 
   const handleLoadSession = () => {

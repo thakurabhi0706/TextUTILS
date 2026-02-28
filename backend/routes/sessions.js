@@ -117,10 +117,16 @@ router.post("/:id/content", async (req, res) => {
 /* ---------- FILE UPLOAD ---------- */
 router.post("/:id/files", upload.single("file"), async (req, res) => {
   try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" })
+    }
+
     const fileData = {
-      name: req.file.originalname,
-      type: req.file.mimetype,
-      url: `/uploads/${req.file.filename}`,
+      filename: req.file.filename, // Generated unique filename
+      originalname: req.file.originalname, // Original filename
+      mimetype: req.file.mimetype, // MIME type
+      size: req.file.size, // File size in bytes
+      url: `/uploads/${req.file.filename}`, // Relative URL
     }
 
     const session = await Session.findOne({ sessionId: req.params.id })
@@ -134,6 +140,7 @@ router.post("/:id/files", upload.single("file"), async (req, res) => {
 
     res.json(fileData)
   } catch (err) {
+    console.error('File upload error:', err)
     res.status(500).json({ error: "Upload failed" })
   }
 })

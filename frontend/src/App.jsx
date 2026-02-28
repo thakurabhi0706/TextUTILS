@@ -160,7 +160,6 @@ export default function Home() {
         onSessionIdChange={setSessionIdInput}
         onLoadSession={handleLoadSession}
         onCopySessionId={handleCopySessionId}
-        loadError={loadError}
       />
 
       <main className="flex-1 flex flex-col overflow-hidden">
