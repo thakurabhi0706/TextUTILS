@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { getApiUrl } from "../../config/api"
+import { getApiUrl } from "@/config/api"
 
 export default function ShareRedirect() {
   const { shortCode } = useParams()

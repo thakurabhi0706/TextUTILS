@@ -7,7 +7,7 @@ import { AICommandBar } from "../components/ai-command-bar"
 import { Header } from "../components/header"
 import { SharePanel } from "../components/share-panel"
 import { X, Download, Trash2 } from "lucide-react"
-import { getApiUrl, APP_URL } from "../config/api"
+import { getApiUrl, APP_URL } from "@/config/api"
 
 export default function Home() {
   const searchParams = useSearchParams()
