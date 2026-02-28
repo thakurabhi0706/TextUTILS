@@ -103,7 +103,6 @@ function PageContent() {
             body: JSON.stringify({ messages: newMessages }),
           })
           
-          
           if (!response.ok) {
             const error = await response.json()
             if (response.status === 413 || error.error?.includes('too large')) {
@@ -237,8 +236,8 @@ function PageContent() {
     window.URL.revokeObjectURL(url)
   }
 
-  const handleDeleteFile = (index) => {
-    fetch(`${getApiUrl()}/sessions/${sessionId}/files/${index}`, {
+  const handleDeleteFile = async (index) => {
+    await fetch(`${getApiUrl()}/sessions/${sessionId}/files/${index}`, {
       method: "DELETE",
     }).then(() => {
       setFiles(prev => prev.filter((_, i) => i !== index))
@@ -388,9 +387,7 @@ function PageContent() {
 
             <div className="flex justify-center bg-white rounded-lg p-3">
               <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-                  `${APP_URL}/s/${sessionId}`
-                )}`}
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(`${APP_URL}/s/${sessionId}`)}`}
                 alt="QR Code"
                 className="w-52 h-52"
               />
