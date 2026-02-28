@@ -1,45 +1,27 @@
 "use client"
 
-
-
 import { useState, useRef, useEffect } from "react"
-
+import { useSearchParams } from "next/navigation"
 import { TextEditor } from "../components/text-editor"
-
 import { AICommandBar } from "../components/ai-command-bar"
-
 import { Header } from "../components/header"
-
 import { SharePanel } from "../components/share-panel"
-
 import { X, Download, Trash2 } from "lucide-react"
-
 import { getApiUrl, APP_URL } from "../config/api"
 
-
-
 export default function Home() {
-
+  const searchParams = useSearchParams()
+  
   const [sessionId, setSessionId] = useState("")
-
   const [content, setContent] = useState("")
-
   const [files, setFiles] = useState([])
-
   const [sessionIdInput, setSessionIdInput] = useState("")
-
   const [isAIFocused, setIsAIFocused] = useState(false)
-
   const [showShare, setShowShare] = useState(false)
-
   const [showQR, setShowQR] = useState(false)
-
   const [loadError, setLoadError] = useState("")
-
   const [chatMessages, setChatMessages] = useState([])
-
   const [isAITyping, setIsAITyping] = useState(false)
-
   const [currentAIResponse, setCurrentAIResponse] = useState("")
 
 
@@ -215,34 +197,24 @@ export default function Home() {
 
 
   useEffect(() => {
-
-    const params = new URLSearchParams(window.location.search)
-
-    const urlId = params.get("session")
-
-
-
+    // Check for session in query params first
+    const urlId = searchParams.get("session")
+    
     if (urlId) {
-
+      // Load session from query parameter
       loadSession(urlId)
-
     } else {
-
+      // Check if we're on the root path without session param
+      // Only create new session if no session is specified
       fetch(`${getApiUrl()}/sessions/new`, { method: "POST" })
-
         .then(res => res.json())
-
         .then(({ id }) => {
-
           window.history.replaceState({}, "", `?session=${id}`)
-
           loadSession(id)
-
         })
-
+        .catch(err => console.error('Failed to create session:', err))
     }
-
-  }, [])
+  }, [searchParams])
 
 
 
@@ -640,6 +612,8 @@ export default function Home() {
           sessionId={sessionId}
 
           onClose={() => setShowShare(false)}
+
+          onLoadSession={handleLoadSession}
 
         />
 
