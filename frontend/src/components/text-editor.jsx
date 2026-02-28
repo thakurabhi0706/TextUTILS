@@ -3,7 +3,7 @@
 import { forwardRef, useRef, useEffect, useState } from "react"
 import { Upload, Copy } from "lucide-react"
 import { Button } from "../components/ui/button"
-import { getApiUrl } from "@/config/api"
+import { getApiUrl } from "../config/api"
 
 const API_BASE = getApiUrl()
 

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Share2, Sparkles, LinkIcon, QrCode, Plus, Copy, Moon, Sun } from "lucide-react"
-import { getApiUrl } from "@/config/api"
+import { getApiUrl } from "../config/api"
 
 export function Header({
   sessionId,
