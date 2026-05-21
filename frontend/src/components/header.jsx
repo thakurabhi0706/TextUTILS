@@ -1,9 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
-import { Share2, Sparkles, LinkIcon, QrCode, Plus, Copy, Moon, Sun } from "lucide-react"
+import { Share2, Sparkles, QrCode, Plus, Copy, Moon, Sun, User } from "lucide-react"
 import { getApiUrl } from "../config/api"
 
 export function Header({
@@ -12,11 +13,17 @@ export function Header({
   onNewClipboard,
   onToggleShare,
   onShowQR,
+  onToggleAccount,
+  onSaveSession,
+  saveDays,
+  onSaveDaysChange,
   sessionIdInput,
   onSessionIdChange,
   onLoadSession,
   loadError,
   onCopySessionId,
+  user,
+  onLogout,
 }) {
   const [copied, setCopied] = useState(false)
   const [isDark, setIsDark] = useState(false)
@@ -45,11 +52,6 @@ export function Header({
     localStorage.setItem('theme', isDark ? 'dark' : 'light')
   }, [isDark, mounted])
 
-  const handleLinkClick = () => {
-    const url = `${window.location.origin}/s/${sessionId}`
-    navigator.clipboard.writeText(url)
-  }
-
   const handleCopyId = async () => {
     if (!shortSessionId) return
 
@@ -72,10 +74,12 @@ export function Header({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-primary-foreground" />
+              <span className="text-[12px] font-semibold uppercase tracking-tight text-primary-foreground leading-none">
+                tU
+              </span>
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-foreground">TextUtils</h1>
+              <h1 className="text-lg font-semibold text-foreground">TextUTILS</h1>
               <p className="text-xs text-muted-foreground">
                 Session: {" "}
                 <span className="font-mono font-bold text-foreground">
@@ -100,11 +104,11 @@ export function Header({
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Button onClick={toggleTheme} variant="outline" size="sm" className="gap-2 bg-transparent">
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </Button>
-            
+
             <Button onClick={onNewClipboard} variant="outline" size="sm" className="gap-2 bg-transparent">
               <Plus className="w-4 h-4" />
               New
@@ -120,15 +124,31 @@ export function Header({
               Share
             </Button>
 
-            <Button onClick={handleLinkClick} variant="outline" size="sm" className="gap-2 bg-transparent">
-              <LinkIcon className="w-4 h-4" />
-              Link
-            </Button>
-
             <Button onClick={onShowQR} variant="outline" size="sm" className="gap-2 bg-transparent">
               <QrCode className="w-4 h-4" />
               QR
             </Button>
+
+            <div className="ml-4">
+              {user ? (
+                <Button
+                  onClick={onToggleAccount}
+                  size="default"
+                  className="rounded-full h-12 px-4 gap-3 text-sm bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-card text-primary font-semibold ring-1 ring-primary/40">
+                    {user.name ? user.name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="hidden sm:inline text-primary-foreground">
+                    {user.name ? user.name.split(" ")[0] : user.email}
+                  </span>
+                </Button>
+              ) : (
+                <Button asChild size="default" className="rounded-full h-12 px-4 gap-2 text-sm bg-primary text-primary-foreground hover:bg-primary/90">
+                  <Link href="/login">Login</Link>
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -147,6 +167,25 @@ export function Header({
           </div>
           <Button onClick={() => onLoadSession(sessionIdInput)} variant="outline" size="sm">
             Load
+          </Button>
+        </div>
+
+        <div className="flex justify-end items-center gap-2">
+          <select
+            value={saveDays}
+            onChange={(e) => onSaveDaysChange(Number(e.target.value))}
+            className="rounded-md border border-border bg-card px-2 py-1 text-sm"
+            title="Retention days"
+          >
+            <option value={1}>1d</option>
+            <option value={2}>2d</option>
+            <option value={7}>7d</option>
+            <option value={30}>30d</option>
+            <option value={0}>No expiry</option>
+          </select>
+
+          <Button onClick={() => onSaveSession()} size="sm" className="gap-2">
+            SAVE SESSION
           </Button>
         </div>
 

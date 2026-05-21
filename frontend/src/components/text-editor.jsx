@@ -16,6 +16,7 @@ export const TextEditor = forwardRef(function TextEditor(
     sessionId,
     onSave,
     onClear,
+    saveLabel,
     chatMessages,
     isAITyping,
     currentAIResponse,
@@ -83,7 +84,7 @@ export const TextEditor = forwardRef(function TextEditor(
   }
 
   return (
-    <div className="flex flex-col flex-1 gap-3 p-4 min-h-0">
+    <div className="flex flex-col flex-1 gap-3 p-4 min-h-[420px] max-h-full overflow-visible">
       {/* Upload */}
       <div className="flex gap-2 items-center">
         <label className="cursor-pointer">
@@ -131,7 +132,7 @@ export const TextEditor = forwardRef(function TextEditor(
             onChange={(e) => onChange(e.target.value)}
             onFocus={onAIFocus}
             placeholder="Paste your text or code here..."
-            className="flex-1 min-h-0 w-full p-3 rounded-lg bg-card border border-input font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/50 overflow-y-auto"
+            className="h-full min-h-[320px] w-full p-3 rounded-lg bg-card border border-input font-mono text-sm resize-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-background overflow-y-auto"
           />
         </div>
 
@@ -256,7 +257,7 @@ export const TextEditor = forwardRef(function TextEditor(
           Clear
         </Button>
         <Button onClick={onSave} size="sm">
-          Save
+          {saveLabel || "SAVE"}
         </Button>
       </div>
     </div>

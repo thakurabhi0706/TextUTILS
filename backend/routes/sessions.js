@@ -1,11 +1,44 @@
 import express from "express"
+import jwt from "jsonwebtoken"
 import multer from "multer"
 import path from "path"
 import { fileURLToPath } from "url"
 import fs from "fs"
 import Session from "../models/Session.js"
+import requireAuth from "../middleware/auth.js"
 
 const router = express.Router()
+
+const JWT_SECRET = process.env.JWT_SECRET || "dev_jwt_secret_change_me"
+
+const getUserIdFromToken = (req) => {
+  try {
+    const token = req.cookies?.token
+    if (!token) return null
+    const payload = jwt.verify(token, JWT_SECRET)
+    return payload.id
+  } catch {
+    return null
+  }
+}
+
+const isSessionEmpty = (session) => {
+  const contentEmpty = !session.content || !session.content.trim()
+  const hasMessages = Array.isArray(session.chatMessages) && session.chatMessages.length > 0
+  const hasFiles = Array.isArray(session.files) && session.files.length > 0
+  return contentEmpty && !hasMessages && !hasFiles
+}
+
+const cleanupEmptySession = async (session) => {
+  if (!session) return
+
+  if (isSessionEmpty(session) && session.owner) {
+    session.owner = undefined
+    session.preview = undefined
+    session.expiresAt = undefined
+    await session.save()
+  }
+}
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -69,6 +102,154 @@ router.post("/new", async (req, res) => {
   }
 })
 
+/* ---------- GET MY SESSIONS ---------- */
+router.get("/mine", requireAuth, async (req, res) => {
+  try {
+    const sessions = await Session.find({ owner: req.user.id })
+      .sort({ createdAt: -1 })
+      .select("sessionId shortCode createdAt preview expiresAt content chatMessages files")
+
+    const filteredSessions = []
+
+    for (const session of sessions) {
+      if (isSessionEmpty(session)) {
+        await cleanupEmptySession(session)
+        continue
+      }
+      filteredSessions.push(session)
+    }
+
+    // Remove internal fields before returning
+    const responseSessions = filteredSessions.map(({ sessionId, shortCode, createdAt, preview, expiresAt }) => ({
+      sessionId,
+      shortCode,
+      createdAt,
+      preview,
+      expiresAt,
+    }))
+
+    res.json({ sessions: responseSessions })
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load saved sessions" })
+  }
+})
+
+
+/* ---------- SAVE SESSION (make permanent + set expiry) ---------- */
+router.post('/:id/save', requireAuth, async (req, res) => {
+  try {
+    const { days } = req.body
+
+    const session = await Session.findOne({ sessionId: req.params.id })
+    if (!session) return res.status(404).json({ error: 'Session not found' })
+
+    // Do not allow saving empty sessions
+    const hasChat = Array.isArray(session.chatMessages) && session.chatMessages.length > 0
+    const hasContent = typeof session.content === 'string' && session.content.trim().length > 0
+    if (!hasChat && !hasContent) {
+      return res.status(400).json({ error: 'No chat or content to save. Add some messages before saving.' })
+    }
+
+    if (session.owner && session.owner.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'Session already claimed' })
+    }
+
+    session.owner = req.user.id
+
+    // set preview from first chat message or content excerpt
+    let preview = ''
+    if (hasChat) {
+      const first = session.chatMessages[0]
+      preview = typeof first?.text === 'string' ? first.text : JSON.stringify(first || '')
+    } else if (hasContent) {
+      preview = session.content.substring(0, 200)
+    }
+
+    session.preview = preview
+
+    if (typeof days === 'number' && days > 0) {
+      session.expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
+    } else {
+      session.expiresAt = undefined
+    }
+
+    await session.save()
+
+    res.json({ success: true, session: { sessionId: session.sessionId, shortCode: session.shortCode, preview: session.preview, createdAt: session.createdAt, expiresAt: session.expiresAt } })
+  } catch (err) {
+    console.error('Save session error:', err)
+    res.status(500).json({ error: 'Failed to save session' })
+  }
+})
+
+
+/* ---------- UPDATE RETENTION ---------- */
+router.post('/:id/retain', requireAuth, async (req, res) => {
+  try {
+    const { days } = req.body
+
+    const session = await Session.findOne({ sessionId: req.params.id })
+    if (!session) return res.status(404).json({ error: 'Session not found' })
+
+    if (!session.owner || session.owner.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized' })
+    }
+
+    if (typeof days === 'number' && days > 0) {
+      session.expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
+    } else {
+      session.expiresAt = undefined
+    }
+
+    await session.save()
+    res.json({ success: true, expiresAt: session.expiresAt })
+  } catch (err) {
+    console.error('Retain session error:', err)
+    res.status(500).json({ error: 'Failed to update retention' })
+  }
+})
+
+
+/* ---------- DELETE SESSION ---------- */
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    const session = await Session.findOne({ sessionId: req.params.id })
+    if (!session) return res.status(404).json({ error: 'Session not found' })
+
+    if (!session.owner || session.owner.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized' })
+    }
+
+    await session.deleteOne()
+    res.json({ success: true })
+  } catch (err) {
+    console.error('Delete session error:', err)
+    res.status(500).json({ error: 'Failed to delete session' })
+  }
+})
+
+/* ---------- CLAIM SESSION ---------- */
+router.post("/:id/claim", requireAuth, async (req, res) => {
+  try {
+    const session = await Session.findOne({ sessionId: req.params.id })
+
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" })
+    }
+
+    if (session.owner && session.owner.toString() !== req.user.id) {
+      return res.status(403).json({ error: "Session already claimed" })
+    }
+
+    session.owner = req.user.id
+    await session.save()
+
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: "Failed to claim session" })
+  }
+})
+
 /* ---------- GET SESSION ---------- */
 router.get("/:id", async (req, res) => {
   try {
@@ -96,13 +277,15 @@ router.post("/:id/content", async (req, res) => {
       })
     }
 
-    const updated = await Session.findOneAndUpdate(
+    const session = await Session.findOneAndUpdate(
       { sessionId: req.params.id },
       { content },
       { new: true }
     )
 
-    res.json(updated)
+    await cleanupEmptySession(session)
+
+    res.json(session)
   } catch (err) {
     if (err.name === 'MongoServerError' && err.code === 167) {
       return res.status(413).json({ 
@@ -164,6 +347,7 @@ router.delete("/:id/files/:index", async (req, res) => {
     // Remove file from array
     session.files.splice(parseInt(index), 1)
     await session.save()
+    await cleanupEmptySession(session)
 
     res.json({ success: true })
   } catch (err) {
@@ -191,6 +375,7 @@ router.post("/:id/chat-messages", async (req, res) => {
 
     session.chatMessages = messages
     await session.save()
+    await cleanupEmptySession(session)
 
     res.json({ success: true })
   } catch (err) {

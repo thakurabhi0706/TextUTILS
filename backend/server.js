@@ -1,12 +1,14 @@
 import express from "express"
 import cors from "cors"
+import cookieParser from "cookie-parser"
 import path from "path"
 import { fileURLToPath } from "url"
 import fs from "fs"
+import authRoutes from "./routes/auth.js"
 import sessionRoutes from "./routes/sessions.js"
 import connectDB from "./config/db.js"
 import { askAI } from "./lib/api.js"
-import "dotenv/config"
+import dotenv from 'dotenv'
 
 
 const app = express()
@@ -22,6 +24,9 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000"
 const __filename = fileURLToPath(import.meta.url)
 
 const __dirname = path.dirname(__filename)
+
+// Load backend .env explicitly (when starting from repo root)
+dotenv.config({ path: path.join(__dirname, '.env') })
 
 
 
@@ -39,6 +44,7 @@ app.use(cors({
 
 
 app.use(express.json({ limit: '10mb' }))
+app.use(cookieParser())
 
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
@@ -59,6 +65,7 @@ app.get("/health", (req, res) => {
 
 
 
+app.use("/api/auth", authRoutes)
 app.use("/api/sessions", sessionRoutes)
 
 

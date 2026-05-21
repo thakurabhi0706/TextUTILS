@@ -1,11 +1,13 @@
 "use client"
 
 import { useState, useRef, useEffect, Suspense } from "react"
+import { toast } from 'sonner'
 import { useSearchParams } from "next/navigation"
 import { TextEditor } from "../components/text-editor"
 import { AICommandBar } from "../components/ai-command-bar"
 import { Header } from "../components/header"
 import { SharePanel } from "../components/share-panel"
+import { AccountPanel } from "../components/account-panel"
 import { X, Download, Trash2 } from "lucide-react"
 import { getApiUrl, APP_URL } from "../config/api"
 
@@ -20,9 +22,15 @@ function PageContent() {
   const [showShare, setShowShare] = useState(false)
   const [showQR, setShowQR] = useState(false)
   const [loadError, setLoadError] = useState("")
+  const [user, setUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [showAccount, setShowAccount] = useState(false)
+  const [saveDays, setSaveDays] = useState(7)
+  const [accountRefreshKey, setAccountRefreshKey] = useState(0)
   const [chatMessages, setChatMessages] = useState([])
   const [isAITyping, setIsAITyping] = useState(false)
   const [currentAIResponse, setCurrentAIResponse] = useState("")
+  const [contentSaved, setContentSaved] = useState(false)
 
   const clearChat = () => {
     setChatMessages([])
@@ -38,6 +46,25 @@ function PageContent() {
 
   const aiInputRef = useRef(null)
   const saveTimeout = useRef(null)
+
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const res = await fetch(`${getApiUrl()}/auth/me`, {
+          credentials: "include",
+        })
+        const data = await res.json()
+
+        setUser(data.user || null)
+      } catch (err) {
+        setUser(null)
+      } finally {
+        setAuthLoading(false)
+      }
+    }
+
+    fetchCurrentUser()
+  }, [])
 
   const loadSession = async (id) => {
     setSessionId(id)
@@ -67,7 +94,7 @@ function PageContent() {
     const data = await res.json()
     
     if (!data.reply) {
-      alert("AI failed. Check backend logs.")
+      toast.error("AI failed. Check backend logs.")
       setIsAITyping(false)
       return
     }
@@ -94,7 +121,7 @@ function PageContent() {
           
           // Check message count before saving
           if (newMessages.length > 90) { // Warn before hitting 100 limit
-            alert('Chat history is getting long! Consider clearing the chat to continue smoothly.')
+            toast('Chat history is getting long! Consider clearing the chat to continue smoothly.')
           }
           
           const response = await fetch(`${getApiUrl()}/sessions/${sessionId}/chat-messages`, {
@@ -106,7 +133,7 @@ function PageContent() {
           if (!response.ok) {
             const error = await response.json()
             if (response.status === 413 || error.error?.includes('too large')) {
-              alert('Chat history is getting too large! Consider clearing the chat to continue.')
+              toast.error('Chat history is getting too large! Consider clearing the chat to continue.')
             }
           }
         } catch (err) {
@@ -128,7 +155,7 @@ function PageContent() {
     } else {
       // Check if we're on the root path without session param
       // Only create new session if no session is specified
-      fetch(`${getApiUrl()}/sessions/new`, { method: "POST" })
+      fetch(`${getApiUrl()}/sessions/new`, { method: "POST", credentials: "include" })
         .then(res => res.json())
         .then(({ id }) => {
           window.history.replaceState({}, "", `?session=${id}`)
@@ -140,12 +167,13 @@ function PageContent() {
 
   const persistContent = (value) => {
     setContent(value)
+    setContentSaved(false)
     clearTimeout(saveTimeout.current)
 
     saveTimeout.current = setTimeout(async () => {
       // Check content size before even attempting to save
       if (value && value.length > 8000000) { // 8MB limit with buffer
-        alert('Content is getting very large! Consider clearing some content or chat messages to prevent save errors.')
+        toast('Content is getting very large! Consider clearing some content or chat messages to prevent save errors.')
         return
       }
       
@@ -159,14 +187,14 @@ function PageContent() {
         if (!response.ok) {
           const error = await response.json()
           if (response.status === 413 || error.error?.includes('too large')) {
-            alert('Content is too large! Please reduce the text size or clear some chat messages.')
+            toast.error('Content is too large! Please reduce the text size or clear some chat messages.')
           } else {
             console.error('Failed to save content:', error)
           }
         }
       } catch (err) {
         if (err.message?.includes('413') || err.message?.includes('too large')) {
-          alert('Content is too large! Please reduce the text size or clear some chat messages.')
+          toast.error('Content is too large! Please reduce the text size or clear some chat messages.')
         } else {
           console.error('Failed to save content:', err)
         }
@@ -174,8 +202,34 @@ function PageContent() {
     }, 400)
   }
 
+  const handleSaveContent = async () => {
+    try {
+      const response = await fetch(`${getApiUrl()}/sessions/${sessionId}/content`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        if (response.status === 413 || error.error?.includes('too large')) {
+          toast.error('Content is too large! Please reduce the text size or clear some chat messages.')
+        } else {
+          toast.error('Failed to save content. Please try again.')
+        }
+        return
+      }
+
+      setContentSaved(true)
+      toast.success('Content saved')
+    } catch (err) {
+      console.error('Failed to save content:', err)
+      toast.error('Failed to save content. Please try again.')
+    }
+  }
+
   const handleNewClipboard = () => {
-    fetch(`${getApiUrl()}/sessions/new`, { method: "POST" })
+    fetch(`${getApiUrl()}/sessions/new`, { method: "POST", credentials: "include" })
       .then(res => res.json())
       .then(({ id }) => {
         window.history.pushState({}, "", `?session=${id}`)
@@ -205,6 +259,51 @@ function PageContent() {
     }
   }
 
+  const handleLogout = async () => {
+    await fetch(`${getApiUrl()}/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    })
+    setUser(null)
+    setShowAccount(false)
+  }
+
+  const handleSaveSession = async () => {
+    if (!user) {
+      toast.error('Please sign in to save sessions')
+      return
+    }
+
+    const hasChat = Array.isArray(chatMessages) && chatMessages.length > 0
+    const hasContent = typeof content === 'string' && content.trim().length > 0
+    if (!hasChat && !hasContent) {
+      toast.error('No chat or content to save. Please add some chat messages before saving.')
+      return
+    }
+
+    try {
+      const res = await fetch(`${getApiUrl()}/sessions/${sessionId}/save`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ days: Number(saveDays) }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to save session')
+        return
+      }
+
+      // refresh account panel
+      setAccountRefreshKey((k) => k + 1)
+      setShowAccount(true)
+    } catch (err) {
+      console.error('Save session failed', err)
+      toast.error('Save failed. Try again.')
+    }
+  }
+
   const isImage = (type) => type?.startsWith("image/")
   const forceDownload = async (file) => {
     const res = await fetch(`${getApiUrl().replace('/api', '')}${file.url}`)
@@ -228,7 +327,7 @@ function PageContent() {
   }
 
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-background flex flex-col">
       <Header
         sessionId={sessionId}
         sessionIdInput={sessionIdInput}
@@ -242,11 +341,17 @@ function PageContent() {
         }}
         onToggleShare={() => setShowShare(true)}
         onShowQR={() => setShowQR(true)}
+        onToggleAccount={() => setShowAccount((prev) => !prev)}
+        onSaveSession={handleSaveSession}
+        saveDays={saveDays}
+        onSaveDaysChange={setSaveDays}
+        user={user}
+        onLogout={handleLogout}
       />
 
-      <main className="flex-1 flex flex-col overflow-hidden min-h-0">
-        <div className="flex-1 flex gap-4 p-4 overflow-hidden min-h-0">
-          <div className="flex-1 flex flex-col gap-4 overflow-hidden min-h-0">
+      <main className="flex-1 flex flex-col overflow-auto min-h-0">
+        <div className="flex-1 flex gap-4 p-4 overflow-auto min-h-0">
+          <div className="flex-1 flex flex-col gap-4 overflow-auto min-h-0">
             <TextEditor
               content={content}
               onChange={persistContent}
@@ -255,8 +360,9 @@ function PageContent() {
                 setFiles(prev => [...prev, ...newFiles])
               }
               sessionId={sessionId}
-              onSave={() => persistContent(content)}
+              onSave={handleSaveContent}
               onClear={() => persistContent("")}
+              saveLabel={contentSaved ? "SAVED" : "SAVE"}
               chatMessages={chatMessages}
               isAITyping={isAITyping}
               currentAIResponse={currentAIResponse}
@@ -264,7 +370,7 @@ function PageContent() {
             />
 
             {files.length > 0 && (
-              <div className="border rounded-lg p-3 space-y-2">
+              <div className="border rounded-lg p-3 space-y-2 max-h-72 overflow-y-auto">
                 <p className="text-xs font-semibold text-muted-foreground">
                   Uploaded Files
                 </p>
@@ -320,9 +426,9 @@ function PageContent() {
         <div className="border-t border-border bg-background/50 backdrop-blur-sm">
           <div className="px-6 py-3">
             <div className="max-w-4xl mx-auto">
-              <h3 className="text-sm font-semibold text-foreground mb-1">About TextUtils</h3>
+              <h3 className="text-sm font-semibold text-foreground mb-1">About TextUTILS</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                TextUtils is your intelligent text companion that helps you analyze, transform, and understand your content with AI-powered assistance. 
+                TextUTILS is your intelligent text companion that helps you analyze, transform, and understand your content with AI-powered assistance. 
                 Whether you're coding, writing, or processing documents, our AI tools provide instant insights and suggestions to enhance your productivity.
               </p>
             </div>
@@ -340,8 +446,21 @@ function PageContent() {
       {showShare && (
         <SharePanel
           sessionId={sessionId}
+          user={user}
           onClose={() => setShowShare(false)}
           onLoadSession={handleLoadSession}
+        />
+      )}
+
+      {showAccount && user && (
+        <AccountPanel
+          user={user}
+          onClose={() => setShowAccount(false)}
+          onLogout={handleLogout}
+          onLoadSession={handleLoadSession}
+          refreshKey={accountRefreshKey}
+          currentSessionId={sessionId}
+          saveDays={saveDays}
         />
       )}
 
